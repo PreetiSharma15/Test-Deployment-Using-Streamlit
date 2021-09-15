@@ -1,13 +1,14 @@
 import numpy as np
 import pandas as pd
 import csv
+from PIL import Image
 
 from datetime import datetime
 from datetime import date
 
 import streamlit as st
 
-import tensorflow
+import tensorflow as tf
 
 from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.preprocessing.sequence import pad_sequences
@@ -40,75 +41,127 @@ tokenizer.fit_on_texts(training_sentences)
 ################################################################################################################
 date_time = date.today().strftime("%A %d %B %Y")
 
+emo_code_url = {
+    "empty": [0, "./emoticons/Empty.png"],
+    "sadness": [1, "./emoticons/Sadness.png"],
+    "enthusiasm": [2, "./emoticons/Enthusiasm.png"],
+    "neutral": [3, "./emoticons/Neutral.png"],
+    "worry": [4, "./emoticons/Worry.png"],
+    "surprise": [5, "./emoticons/Surprise.png"],
+    "love": [6, "./emoticons/Love.png"],
+    "fun": [7, "./emoticons/Fun.png"],
+    "hate": [8, "./emoticons/Hate.png"],
+    "happiness": [9, "./emoticons/Happiness.png"],
+    "boredom": [10, "./emoticons/Boredom.png"],
+    "relief": [11, "./emoticons/Relief.png"],
+    "anger": [12, "./emoticons/Anger.png"],
+}
+
 
 def save(text, emotion):
-
-    day_entry = {"date": date_time, "text": text, "emotion": emotion}
-
     with open("data_entry.csv", "a") as f:
-        # for key in day_entry.keys():
-        f.write("%s,%s,%s\n" % (date_time,text, emotion))
+        f.write("%s,%s,%s\n" % (date_time, text, emotion))
 
 
-# Title
-st.title("Digital Journal")
-# Day and Date
-st.write(date_time)
+def app_headers():
+    # Title
+    st.title("Digital Journal")
+    # Day and Date
+    st.write(date_time)
 
-# New Entry
-text_input = str(st.text_input("How was your day?"))
 
-if text_input != "":
-    sentence = []
-    sentence.append(text_input)
-    print(sentence)
+def new_entry():
+    # New Entry
+    input = st.empty()
+    text = str(input.text_input("How was your day?"))
 
-    sequences = tokenizer.texts_to_sequences(sentence)
-    print("sequence", sequences)
+    if text != "":
+        sentence = []
+        sentence.append(text)
+        print(sentence)
 
-    padded = pad_sequences(
-        sequences, maxlen=max_length, padding=padding_type, truncating=trunc_type
+        sequences = tokenizer.texts_to_sequences(sentence)
+        print("sequence", sequences)
+
+        padded = pad_sequences(
+            sequences, maxlen=max_length, padding=padding_type, truncating=trunc_type
+        )
+        testing_padded = np.array(padded)
+
+        predicted_class_label = np.argmax(model.predict(testing_padded), axis=-1)
+        print(predicted_class_label)
+        emotion = ""
+        emoticon = ""
+        col1, col2, col3 = st.columns(3)
+        for key, value in emo_code_url.items():
+            if value[0] == predicted_class_label:
+                emotion = key
+                emoticon = value[1]
+                with col1:
+                    st.write(key.upper())
+                with col2:
+                    image = Image.open(emoticon)
+                    st.image(image, width=60)
+        
+        with col3:
+            if st.button("Save Entry"):                              
+                save(text, emotion)
+                # text = input.text_input("") 
+        
+        
+
+
+def display_entries():
+
+    st.header("Your Entries!")
+
+    day_entry_list = pd.read_csv("data_entry.csv")
+    day_entry_list["date"] = pd.to_datetime(day_entry_list["date"])
+    day_entry_list = day_entry_list.sort_values(
+        by="date", ascending=False, ignore_index=True
     )
-    testing_padded = np.array(padded)
 
-    encode_emotions = {
-        "empty": 0,
-        "sadness": 1,
-        "enthusiasm": 2,
-        "neutral": 3,
-        "worry": 4,
-        "surprise": 5,
-        "love": 6,
-        "fun": 7,
-        "hate": 8,
-        "happiness": 9,
-        "boredom": 10,
-        "relief": 11,
-        "anger": 12,
-    }
+    # st.write(day_entry_list)
 
-    predicted_class_label = np.argmax(model.predict(testing_padded), axis=-1)
-    print(predicted_class_label)
-    emotion = ""
-    for key, value in encode_emotions.items():
-        if value == predicted_class_label:
-            emotion = key
-            st.write("Prediction: ", key.upper())
+    col1, col2, col3 = st.columns(3)
 
-    if st.button("Save Entry"):
-        save(text_input, emotion)
+    for i in range(len(day_entry_list)):
 
+        if i < 3:
 
-st.write("Your Entries!")
+            date = day_entry_list.loc[i, "date"]
+            text = day_entry_list.loc[i, "text"]
+            emotion = day_entry_list.loc[i, "emotion"]
+            image = ""
 
-day_entry_list = pd.read_csv("data_entry.csv")
+            for key, value in emo_code_url.items():
+                
+                if emotion == key:
+                    print(value[1])
+                    image = Image.open(value[1])
 
-col1, col2, col3 = st.columns(3)
-for i in range(len(day_entry_list)):
-    if i<3:
-        date = day_entry_list.loc[i, "date"]
-        text = day_entry_list.loc[i, "text"]
-        emotion = day_entry_list.loc[i, "emotion"]
-        st.write(date, text, emotion)
+            if i + 1 == 1:
+                with col1:
+                    st.subheader(date.strftime("%A, %d %B %Y"))
+                    st.write(text)
+                    st.write(emotion.upper())
+                    st.image(image, width=60)
+            if i + 1 == 2:
+                with col2:
+                    st.subheader(date.strftime("%A, %d %B %Y"))
+                    st.write(text)
+                    st.write(emotion.upper())
+                    st.image(image, width=60)
+            if i + 1 == 3:
+                with col3:                   
+                    st.subheader(date.strftime("%A, %d %B %Y"))
+                    st.write(text)
+                    st.write(emotion.upper())
+                    st.image(image, width=60)
 
 
+## Calling methods......
+
+app_headers()
+new_entry()
+display_entries()
